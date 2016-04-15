@@ -147,7 +147,7 @@ let emit_frames a =
       let line = min 0xFFFFF d.dinfo_line
       and char_start = min 0xFF d.dinfo_char_start
       and char_end = min 0x3FF d.dinfo_char_end
-      and kind = match d.dinfo_kind with Dinfo_call -> 0 | Dinfo_raise -> 1 in
+      and kind = match d.dinfo_kind with Dinfo_call -> 0 | Dinfo_raise -> 1 | Dinfo_event -> 2 in
       let info =
         Int64.add (Int64.shift_left (Int64.of_int line) 44) (
         Int64.add (Int64.shift_left (Int64.of_int char_start) 36) (

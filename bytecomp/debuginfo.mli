@@ -13,7 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type kind = Dinfo_call | Dinfo_raise
+type kind = Dinfo_call | Dinfo_raise | Dinfo_event
 
 type t = private {
   dinfo_kind: kind;
@@ -21,6 +21,11 @@ type t = private {
   dinfo_line: int;
   dinfo_char_start: int;
   dinfo_char_end: int
+}
+
+type 'a expression = {
+  exp: 'a;
+  dbg: t;
 }
 
 val none: t
@@ -34,5 +39,10 @@ val from_filename: kind -> string -> t
 
 val from_call: Lambda.lambda_event -> t
 val from_raise: Lambda.lambda_event -> t
+val from_event: Lambda.lambda_event -> t
 
 val to_location: t -> Location.t
+
+(** Build an expression with no debuging information **)
+val mk_empty: 'a -> 'a expression
+val mkdbg: t -> 'a -> 'a expression

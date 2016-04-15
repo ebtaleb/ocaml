@@ -16,7 +16,7 @@
 open Lexing
 open Location
 
-type kind = Dinfo_call | Dinfo_raise
+type kind = Dinfo_call | Dinfo_raise | Dinfo_event
 
 type t = {
   dinfo_kind: kind;
@@ -24,6 +24,11 @@ type t = {
   dinfo_line: int;
   dinfo_char_start: int;
   dinfo_char_end: int
+}
+
+type 'a expression = {
+  exp: 'a;
+  dbg: t;
 }
 
 let none = {
@@ -65,6 +70,7 @@ let from_location kind loc =
 
 let from_call ev = from_location Dinfo_call ev.Lambda.lev_loc
 let from_raise ev = from_location Dinfo_raise ev.Lambda.lev_loc
+let from_event ev = from_location Dinfo_event ev.Lambda.lev_loc
 
 let to_location d =
   if is_none d then Location.none
@@ -79,3 +85,6 @@ let to_location d =
     in
     let loc_end = { loc_start with pos_cnum = d.dinfo_char_end; } in
     { Location. loc_ghost = false; loc_start; loc_end; }
+
+let mkdbg dbg exp = {exp; dbg}
+let mk_empty exp = mkdbg none exp
