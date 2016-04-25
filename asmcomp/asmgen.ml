@@ -99,7 +99,6 @@ let available_ranges_and_emit ppf ~dwarf fundecl =
         | Some dwarf -> Dwarf.pre_emission_dwarf_for_function dwarf ~fundecl
   in
   let _ = pass_dump_linear_if ppf dump_linear "Available subranges" fundecl in
-  let build = Compilenv.current_build () in
   Emit.fundecl fundecl ~dwarf
 
 let (++) x f = f x
@@ -272,7 +271,7 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
   in
   raw_clambda_dump_if ppf clambda_and_constants;
   end_gen_implementation ?toplevel ~source_provenance
-                         ppf clambda_and_constants Some(lambda.value_bindings)
+                         ppf clambda_and_constants lambda.value_bindings
 
 let compile_implementation_gen ?toplevel ~source_provenance prefixname
     ppf gen_implementation program =

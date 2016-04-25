@@ -1011,7 +1011,7 @@ let transl_store_implementation module_name (str, restr) =
   transl_store_subst := s;
   { Lambda.main_module_block_size = i;
     code = wrap_globals ~flambda:false r;
-    value_bindings = vb }
+    value_bindings = Some(vb) }
 
 (* Compile a toplevel phrase *)
 

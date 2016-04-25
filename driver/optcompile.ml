@@ -119,7 +119,8 @@ let implementation ppf sourcefile outputprefix ~backend =
         ++ Timings.(time (Generate sourcefile))
             (fun { Lambda.code; main_module_block_size } ->
               { Lambda.code = Simplif.simplify_lambda code;
-                main_module_block_size }
+                main_module_block_size;
+                value_bindings = None }
               ++ print_if ppf Clflags.dump_lambda Printlambda.program
               ++ Asmgen.compile_implementation_clambda ~source_provenance
                 outputprefix ppf;

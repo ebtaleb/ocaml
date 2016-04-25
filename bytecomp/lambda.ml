@@ -258,7 +258,7 @@ and lambda_event_kind =
 type program =
   { code : lambda;
     main_module_block_size : int;
-    value_bindings : Value_binding.t Ident.tbl }
+    value_bindings : Value_binding.t Ident.tbl option }
 
 let const_unit = Const_pointer 0
 

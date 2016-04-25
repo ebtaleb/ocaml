@@ -120,7 +120,7 @@ let make_package_object ppf members targetobj targetname coercion
       Translmod.transl_store_package
         components (Ident.create_persistent targetname) coercion in
     Asmgen.compile_implementation_clambda ~source_provenance
-      prefixname ppf { Lambda.code; main_module_block_size; }
+      prefixname ppf { Lambda.code; main_module_block_size; value_bindings=None }
   end;
   let objfiles =
     List.map
