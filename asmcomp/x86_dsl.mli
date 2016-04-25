@@ -93,6 +93,15 @@ module D : sig
   val text: unit -> unit
   val type_: string -> string -> unit
   val word: constant -> unit
+
+  val str_setvar: string * string -> unit
+  val string_d: string -> unit
+  val byte_exp: string -> unit
+  val word_exp: string -> unit
+  val long_exp: string -> unit
+  val quad_exp: string -> unit
+  val sleb128_exp: string -> unit
+  val uleb128_exp: string -> unit
 end
 
 module I : sig

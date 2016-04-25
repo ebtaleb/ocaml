@@ -58,11 +58,12 @@ let flambda_raw_clambda_dump_if ppf
 
 type clambda_and_constants =
   Clambda.ulambda *
+  Clambda.value_approximation array *
   Clambda.preallocated_block list *
   Clambda.preallocated_constant list
 
 let raw_clambda_dump_if ppf
-      ((ulambda, _, structured_constants):clambda_and_constants) =
+      ((ulambda, _, _, structured_constants):clambda_and_constants) =
   if !dump_rawclambda then
     begin
       Format.fprintf ppf "@.clambda (before Un_anf):@.";
@@ -91,9 +92,19 @@ let rec regalloc ppf round fd =
     Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
   end else newfd
 
+let available_ranges_and_emit ppf ~dwarf fundecl =
+    let fundecl =
+        match dwarf with
+        | None -> fundecl
+        | Some dwarf -> Dwarf.pre_emission_dwarf_for_function dwarf ~fundecl
+  in
+  let _ = pass_dump_linear_if ppf dump_linear "Available subranges" fundecl in
+  let build = Compilenv.current_build () in
+  Emit.fundecl fundecl ~dwarf
+
 let (++) x f = f x
 
-let compile_fundecl (ppf : formatter) fd_cmm =
+let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
   let build = Compilenv.current_build () in
@@ -114,16 +125,17 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
+  ++ Timings.(accumulate_time (Liveness build)) Available_regs.fundecl
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Timings.(accumulate_time (Scheduling build)) Scheduling.fundecl
   ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"
-  ++ Timings.(accumulate_time (Emit build)) Emit.fundecl
+  ++ Timings.(accumulate_time (Emit build)) (available_ranges_and_emit ppf ~dwarf)
 
-let compile_phrase ppf p =
+let compile_phrase ppf ~dwarf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
   match p with
-  | Cfunction fd -> compile_fundecl ppf fd
+  | Cfunction fd -> compile_fundecl ppf ~dwarf fd
   | Cdata dl -> Emit.data dl
 
 
@@ -133,7 +145,7 @@ let compile_genfuns ppf f =
   List.iter
     (function
        | (Cfunction {fun_name = name}) as ph when f name ->
-           compile_phrase ppf ph
+           compile_phrase ppf ~dwarf:None ph
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
@@ -167,12 +179,41 @@ let set_export_info (ulambda, prealloc, structured_constants, export) =
   (ulambda, prealloc, structured_constants)
 
 let end_gen_implementation ?toplevel ~source_provenance ppf
-    (clambda:clambda_and_constants) =
-  Emit.begin_assembly ();
-  clambda
+    (clambda:clambda_and_constants) value_bindings =
+  let start_of_code_symbol, end_of_code_symbol, start_of_data_symbol = Emit.begin_assembly () in
+  let clam, global_approx, pa_b, pa_c = clambda in
+  let dwarf =
+    if !Clflags.debug then
+    let target = `Other in
+    let dwarf =
+      (* CR mshinwell: How do we choose the DWARF format?  It must match
+      whatever the CFI directives compile down to, I think. *)
+      Dwarf_format.set_size `Thirty_two;
+      Dwarf.create ~output_path:None
+        ~emit_expr:Emit.emit_expr
+        ~emit_symbol:Emit.emit_symbol
+        ~emit_label: Emit.emit_label
+        ~emit_label_declaration:Emit.emit_label_declaration
+        ~emit_section_declaration:Emit.emit_section_declaration
+        ~emit_switch_to_section:Emit.emit_switch_to_section
+        ~start_of_code_symbol
+        ~end_of_code_symbol
+        ~start_of_data_symbol
+        ~target
+        ~module_value_bindings:(match value_bindings with Some(vb) -> vb | None -> failwith "er")
+      in
+      Some dwarf
+    else
+      None
+  in
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf -> Dwarf.set_global_approx dwarf ~global_approx
+  end;
+  (clam, pa_b, pa_c)
   ++ Timings.(time (Cmm source_provenance)) Cmmgen.compunit
   ++ Timings.(time (Compile_phrases source_provenance))
-       (List.iter (compile_phrase ppf))
+       (List.iter (compile_phrase ppf ~dwarf))
   ++ (fun () -> ());
   (match toplevel with None -> () | Some f -> compile_genfuns ppf f);
 
@@ -182,12 +223,12 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
      This is important if a module that uses such a symbol is later
      dynlinked. *)
 
-  compile_phrase ppf
+  compile_phrase ppf ~dwarf
     (Cmmgen.reference_symbols
        (List.filter (fun s -> s <> "" && s.[0] <> '%')
           (List.map Primitive.native_name !Translmod.primitive_declarations))
     );
-  Emit.end_assembly ()
+  Emit.end_assembly dwarf
 
 let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
     (program:Flambda.program) =
@@ -213,11 +254,11 @@ let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
       (Symbol.Map.bindings constants)
   in
   end_gen_implementation ?toplevel ~source_provenance ppf
-    (clambda, preallocated, constants)
+    (clambda, [||], preallocated, constants) None
 
 let lambda_gen_implementation ?toplevel ~source_provenance ppf
     (lambda:Lambda.program) =
-  let clambda = Closure.intro lambda.main_module_block_size lambda.code in
+  let clambda, global_approx = Closure.intro lambda.main_module_block_size lambda.code in
   let preallocated_block =
     Clambda.{
       symbol = Compilenv.make_symbol None;
@@ -227,10 +268,11 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
     }
   in
   let clambda_and_constants =
-    clambda, [preallocated_block], []
+    clambda, global_approx, [preallocated_block], []
   in
   raw_clambda_dump_if ppf clambda_and_constants;
-  end_gen_implementation ?toplevel ~source_provenance ppf clambda_and_constants
+  end_gen_implementation ?toplevel ~source_provenance
+                         ppf clambda_and_constants Some(lambda.value_bindings)
 
 let compile_implementation_gen ?toplevel ~source_provenance prefixname
     ppf gen_implementation program =

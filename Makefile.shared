@@ -40,7 +40,7 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
-        -I middle_end/base_types -I asmcomp -I driver -I toplevel
+        -I middle_end/base_types -I asmcomp -I asmcomp/dwarf_low -I driver -I toplevel
 
 UTILS=utils/config.cmo utils/misc.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
@@ -75,6 +75,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
+  bytecomp/value_binding.cmo \
   bytecomp/translobj.cmo bytecomp/translattribute.cmo \
   bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
@@ -90,6 +91,38 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
+
+DWARF_LOW=\
+  asmcomp/dwarf_low/std_internal.cmo \
+  asmcomp/dwarf_low/dwarf_format.cmo \
+  asmcomp/dwarf_low/section_names.cmo \
+  asmcomp/dwarf_low/emitter.cmo \
+  asmcomp/dwarf_low/emittable.cmo \
+  asmcomp/dwarf_low/value.cmo \
+  asmcomp/dwarf_low/initial_length.cmo \
+  asmcomp/dwarf_low/child_determination.cmo \
+  asmcomp/dwarf_low/dw_tag.cmo \
+  asmcomp/dwarf_low/form.cmo \
+  asmcomp/dwarf_low/operator.cmo \
+  asmcomp/dwarf_low/simple_location_expression.cmo \
+  asmcomp/dwarf_low/single_location_description.cmo \
+  asmcomp/dwarf_low/attribute.cmo \
+  asmcomp/dwarf_low/abbreviation_code.cmo \
+  asmcomp/dwarf_low/abbreviations_table_entry.cmo \
+  asmcomp/dwarf_low/abbreviations_table.cmo \
+  asmcomp/dwarf_low/aranges_table.cmo \
+  asmcomp/dwarf_low/encoding_attribute.cmo \
+  asmcomp/dwarf_low/attribute_value.cmo \
+  asmcomp/dwarf_low/debugging_information_entry.cmo \
+  asmcomp/dwarf_low/version.cmo \
+  asmcomp/dwarf_low/location_expression.cmo \
+  asmcomp/dwarf_low/location_list_entry.cmo \
+  asmcomp/dwarf_low/location_list.cmo \
+  asmcomp/dwarf_low/proto_die.cmo \
+  asmcomp/dwarf_low/debug_info_section.cmo \
+  asmcomp/dwarf_low/debug_loc_table.cmo \
+  asmcomp/dwarf_low/pubnames_table.cmo \
+  asmcomp/dwarf_low/dwarf_low_dot_std.cmo
 
 INTEL_ASM=\
   asmcomp/x86_proc.cmo \
@@ -131,6 +164,8 @@ ASMCOMP=\
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
+  $(DWARF_LOW) \
+  asmcomp/available_regs.cmo asmcomp/available_ranges.cmo asmcomp/dwarf.cmo \
   asmcomp/branch_relaxation_intf.cmo \
   asmcomp/branch_relaxation.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \

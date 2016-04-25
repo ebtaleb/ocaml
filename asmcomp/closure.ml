@@ -1138,7 +1138,7 @@ and close_functions fenv cenv fun_defs =
     let dbg = match body with
       | Levent (_,({lev_kind=Lev_function} as ev)) -> Debuginfo.from_call ev
       | _ -> Debuginfo.none in
-    let env_param = Ident.create "env" in
+    let env_param = Ident.create ".env" in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
@@ -1340,6 +1340,7 @@ let intro size lam =
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, approx) = close Tbl.empty Tbl.empty lam in
+  let saved_global_approx = !global_approx in
   let opaque =
     !Clflags.opaque
     || Env.is_imported_opaque (Compilenv.current_unit_name ())
@@ -1348,4 +1349,4 @@ let intro size lam =
   then Compilenv.set_global_approx(Value_unknown)
   else collect_exported_structured_constants (Value_tuple !global_approx);
   global_approx := [||];
-  ulam
+  ulam, saved_global_approx

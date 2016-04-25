@@ -216,4 +216,13 @@ type asm_line =
   | Size of string * constant
   | Type of string * string
 
+  | SetStr of string * string
+  | String of string
+  | ByteExp of string
+  | WordExp of string
+  | LongExp of string
+  | QuadExp of string
+  | Sleb128 of string
+  | Uleb128 of string
+
 type asm_program = asm_line list

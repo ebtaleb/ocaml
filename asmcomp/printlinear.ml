@@ -26,6 +26,7 @@ let label ppf l =
 let instr ppf i =
   begin match i.desc with
   | Lend -> ()
+  | Lprologue -> fprintf ppf "prologue"
   | Lop op ->
       begin match op with
       | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
@@ -65,6 +66,8 @@ let instr ppf i =
       fprintf ppf "pop trap"
   | Lraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
+  | Lavailable_subrange _offset ->
+      fprintf ppf "<avail subrange>:"
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)

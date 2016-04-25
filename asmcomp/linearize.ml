@@ -30,10 +30,12 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    live: Reg.Set.t }
+    live: Reg.Set.t;
+    available_before: Reg.Set.t }
 
 and instruction_desc =
     Lend
+  | Lprologue
   | Lop of operation
   | Lreloadretaddr
   | Lreturn
@@ -46,6 +48,7 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
+  | Lavailable_subrange of int option ref
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _
@@ -81,19 +84,22 @@ let rec end_instr =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg.Set.empty }
 
 (* Cons an instruction (live, debug empty) *)
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg.Set.empty }
 
 (* Cons a simple instruction (arg, res, live empty) *)
 
 let cons_instr d n =
   { desc = d; next = n; arg = [||]; res = [||];
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg.Set.empty }
 
 (* Build an instruction with arg, res, dbg, live taken from
    the given Mach.instruction *)
@@ -101,7 +107,8 @@ let cons_instr d n =
 let copy_instr d i n =
   { desc = d; next = n;
     arg = i.Mach.arg; res = i.Mach.res;
-    dbg = i.Mach.dbg; live = i.Mach.live }
+    dbg = i.Mach.dbg; live = i.Mach.live;
+    available_before = i.Mach.available_before }
 
 (*
    Label the beginning of the given instruction sequence.
@@ -293,8 +300,18 @@ let reset () =
   label_counter := 99;
   exit_label := []
 
+let add_prologue first_insn =
+  { desc = Lprologue;
+    next = first_insn;
+    arg = [| |];
+    res = [| |];
+    dbg = first_insn.dbg;
+    live = first_insn.live;
+    available_before = first_insn.available_before;
+  }
+
 let fundecl f =
   { fun_name = f.Mach.fun_name;
-    fun_body = linear f.Mach.fun_body end_instr;
+    fun_body = add_prologue (linear f.Mach.fun_body end_instr);
     fun_fast = f.Mach.fun_fast;
     fun_dbg  = f.Mach.fun_dbg }

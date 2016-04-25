@@ -64,7 +64,13 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t }
+    mutable live: Reg.Set.t;
+    (* [available_before] shows which registers are available immediately
+       prior to the instruction.  All registers in [available_before] will be
+       tagged with value identifier names.  There will be at most one entry
+       in any given [available_before] set for a given value identifier.
+       See available_regs.ml for more details. *)
+    mutable available_before: Reg.Set.t }
 
 and instruction_desc =
     Iend

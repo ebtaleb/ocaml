@@ -436,11 +436,12 @@ let emit_float_constant f lbl =
   D.qword (Const f)
 
 let emit_global_label s =
-  let lbl = Compilenv.make_symbol (Some s) in
-  add_def_symbol lbl;
-  let lbl = emit_symbol lbl in
+  let lbl_sym = Compilenv.make_symbol (Some s) in
+  add_def_symbol lbl_sym;
+  let lbl = emit_symbol lbl_sym in
   D.global lbl;
-  _label lbl
+  _label lbl;
+  lbl_sym
 
 
 (* Output the assembly code for an instruction *)
@@ -455,6 +456,13 @@ let emit_instr fallthrough i =
   emit_debug_info i.dbg;
   match i.desc with
   | Lend -> ()
+  | Lprologue -> ()
+  (*
+    if fp then begin
+      I.push (_r RBP);
+      cfi_adjust_cfa_offset 8;
+      I.movq (_r RSP, _r RBP);
+    end; *)
   | Lop(Imove | Ispill | Ireload) ->
       let src = i.arg.(0) and dst = i.res.(0) in
       if src.loc <> dst.loc then
@@ -677,6 +685,15 @@ let emit_instr fallthrough i =
       end
   | Llabel lbl ->
       emit_Llabel fallthrough lbl
+  | Lavailable_subrange byte_offset_from_sp ->
+    assert (!byte_offset_from_sp = None);
+    assert (Array.length i.arg = 1);
+    let reg = i.arg.(0) in
+    begin match reg.loc with
+      | Unknown | Reg _ -> ()
+      | Stack loc ->
+        byte_offset_from_sp := Some (slot_offset loc (register_class reg))
+    end
   | Lbranch lbl ->
       I.jmp (label lbl)
   | Lcondbranch(tst, lbl) ->
@@ -804,7 +821,8 @@ let emit_profile () =
 
 (* Emission of a function declaration *)
 
-let fundecl fundecl =
+let fundecl ~dwarf fundecl =
+  let end_of_function_label = new_label () in
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -842,7 +860,13 @@ let fundecl fundecl =
   def_label !tailrec_entry_point;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
+  def_label end_of_function_label;
   emit_call_bound_errors ();
+  begin match dwarf with
+    | None -> ()
+    | Some dwarf ->
+      Dwarf.post_emission_dwarf_for_function dwarf ~end_of_function_label
+  end;
   if frame_required() then begin
     let n = frame_size() - 8 - (if fp then 8 else 0) in
     if n <> 0
@@ -925,14 +949,16 @@ let begin_assembly() =
   end;
 
   D.data ();
-  emit_global_label "data_begin";
+  let lbl_data_begin = emit_global_label "data_begin" in ();
 
   D.text ();
-  emit_global_label "code_begin";
+  let lbl_code_begin = emit_global_label "code_begin" in ();
   if system = S_macosx then I.nop (); (* PR#4690 *)
-  ()
 
-let end_assembly() =
+  let lbl_end = Compilenv.make_symbol (Some "code_end") in
+  lbl_code_begin, lbl_end, lbl_data_begin
+
+let end_assembly dwarf =
   if !float_constants <> [] then begin
     begin match system with
     | S_macosx -> D.section ["__TEXT";"__literal8"] None ["8byte_literals"]
@@ -947,15 +973,15 @@ let end_assembly() =
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
 
-  emit_global_label "code_end";
+  let _ = emit_global_label "code_end" in ();
 
   emit_imp_table();
 
   D.data ();
-  emit_global_label "data_end";
+  let _ = emit_global_label "data_end" in ();
   D.long (const 0);
 
-  emit_global_label "frametable";
+  let _ = emit_global_label "frametable" in ();
 
   let setcnt = ref 0 in
   emit_frames
@@ -998,6 +1024,11 @@ let end_assembly() =
     symbols_defined := StringSet.empty;
   end;
 
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf -> Dwarf.emit dwarf
+  end;
+
   let asm =
     if !Emitaux.create_asm_file then
       Some
@@ -1009,3 +1040,30 @@ let end_assembly() =
       None
   in
   X86_proc.generate_code asm
+
+(* Miscellany for DWARF information emission *)
+
+let emit_expr dir s =
+  let open X86_dsl.D in
+  match dir with
+  | \`Byte -> byte_exp s
+  | \`Word -> word_exp s
+  | \`Long -> long_exp s
+  | \`Quad -> quad_exp s
+  | \`Sleb128 -> sleb128_exp s
+  | \`Uleb128 -> uleb128_exp s
+
+let emit_label_declaration ~label_name =
+  _label (emit_label label_name)
+
+let emit_section_declaration ~section_name =
+  if system = S_macosx then
+    D.section ["__DWARF";section_name] None ["regular"; "debug"]
+  else
+    D.section ["." ^ section_name] (Some "") ["%progbits"]
+
+let emit_switch_to_section ~section_name =
+  if system = S_macosx then
+    emit_section_declaration ~section_name
+  else
+    D.section ["." ^ section_name] None []

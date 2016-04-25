@@ -33,6 +33,8 @@ type error =
 
 exception Error of Location.t * error
 
+let native_and_debug () = !Clflags.native_code && !Clflags.debug
+
 (* Keep track of the root path (from the root of the namespace to the
    currently compiled module expression).  Useful for naming extensions. *)
 
@@ -726,7 +728,7 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let transl_store_structure glob map prims str =
+let transl_store_structure glob map value_bindings prims str =
   let rec transl_store rootpath subst = function
     [] ->
       transl_store_subst := subst;
@@ -737,7 +739,21 @@ let transl_store_structure glob map prims str =
             Lsequence(subst_lambda subst (transl_exp expr),
                       transl_store rootpath subst rem)
         | Tstr_value(rec_flag, pat_expr_list) ->
-            let ids = let_bound_idents pat_expr_list in
+            (*let ids = let_bound_idents pat_expr_list in*)
+            let ids =
+              if not (native_and_debug ()) then
+                let_bound_idents pat_expr_list
+              else begin
+                let id_ty_locs =
+                  let_bound_idents_with_type_and_location pat_expr_list
+                in
+                List.iter (fun (id, ty, loc) ->
+                  value_bindings :=
+                    Ident.add id (ty, loc, rootpath) !value_bindings)
+                  id_ty_locs;
+                List.map (fun (id, _ty, _loc) -> id) id_ty_locs
+              end
+            in
             let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
             Lsequence(subst_lambda subst lam,
                       transl_store rootpath (add_idents false ids subst) rem)
@@ -949,24 +965,53 @@ let transl_store_gen module_name ({ str_items = str }, restr) topl =
   let module_id = Ident.create_persistent module_name in
   let (map, prims, size) =
     build_ident_map restr (defined_idents str) (more_idents str) in
+  let value_bindings = ref Ident.empty in
   let f = function
     | [ { str_desc = Tstr_eval (expr, _attrs) } ] when topl ->
         assert (size = 0);
         subst_lambda !transl_store_subst (transl_exp expr)
-    | str -> transl_store_structure module_id map prims str in
-  transl_store_label_init module_id size f str
+    | str -> transl_store_structure module_id map value_bindings prims str in
+  let size, lam = transl_store_label_init module_id size f str in
+  let value_bindings =
+    if not (native_and_debug ()) then
+      Ident.empty
+    else begin
+      Ident.fold_all (fun id (ty, loc, path) value_bindings ->
+        match Ident.find_same id map with
+        | (pos, _coercion) ->
+          (* CR-soon mshinwell: [module_id] should probably become optional,
+          together with new code in [transl_structure], so that we can
+          deal with anonymous structures properly. *)
+          let value_binding =
+            { Value_binding.
+              ty; location = loc; path; pos; module_id;
+            }
+          in
+          Ident.add id value_binding value_bindings
+        | exception Not_found -> assert false
+        ) !value_bindings (*~init:*)Ident.empty
+    end
+  in
+  (value_bindings, size), lam
+    (*| str -> transl_store_structure module_id map prims str in*)
+  (*transl_store_label_init module_id size f str*)
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
 
 let transl_store_phrases module_name str =
-  transl_store_gen module_name (str,Tcoerce_none) true
+  let (_value_bindings, size), lam =
+    transl_store_gen module_name (str,Tcoerce_none) true
+  in
+    size, lam
+  (*transl_store_gen module_name (str,Tcoerce_none) true*)
 
 let transl_store_implementation module_name (str, restr) =
   let s = !transl_store_subst in
   transl_store_subst := Ident.empty;
-  let (i, r) = transl_store_gen module_name (str, restr) false in
+  let (vb,i), r = transl_store_gen module_name (str, restr) false in
   transl_store_subst := s;
   { Lambda.main_module_block_size = i;
-    code = wrap_globals ~flambda:false r; }
+    code = wrap_globals ~flambda:false r;
+    value_bindings = vb }
 
 (* Compile a toplevel phrase *)
 

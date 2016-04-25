@@ -204,7 +204,7 @@ let scan_file obj_name tolink = match read_file obj_name with
 (* Second pass: generate the startup file and link it with everything else *)
 
 let make_startup_file ppf units_list =
-  let compile_phrase p = Asmgen.compile_phrase ppf p in
+  let compile_phrase p = Asmgen.compile_phrase ppf p ~dwarf:None in
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset ~source_provenance:Timings.Startup "_startup";
   (* set the name of the "current" compunit *)
@@ -235,7 +235,7 @@ let make_startup_file ppf units_list =
   compile_phrase(Cmmgen.code_segment_table ("_startup" :: name_list));
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
-  Emit.end_assembly ()
+  Emit.end_assembly ~dwarf:None
 
 let make_shared_startup_file ppf units =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
@@ -250,7 +250,7 @@ let make_shared_startup_file ppf units =
        (List.map (fun (ui,_) -> ui.ui_symbol) units));
   (* this is to force a reference to all units, otherwise the linker
      might drop some of them (in case of libraries) *)
-  Emit.end_assembly ()
+  Emit.end_assembly ~dwarf:None
 
 let call_linker_shared file_list output_name =
   if not (Ccomp.call_linker Ccomp.Dll output_name file_list "")

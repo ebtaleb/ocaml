@@ -99,9 +99,18 @@ module D = struct
   let setvar (x, y) = directive (Set (x, y))
   let size name cst = directive (Size (name, cst))
   let space n = directive (Space n)
+  let string_d s = directive (String s)
   let text () = section [ ".text" ] None []
   let type_ name typ = directive (Type (name, typ))
   let word cst = directive (Word cst)
+
+  let str_setvar (arg1, arg2) = directive (SetStr (arg1, arg2))
+  let byte_exp s = directive (ByteExp s)
+  let word_exp s = directive (WordExp s)
+  let long_exp s = directive (LongExp s)
+  let quad_exp s = directive (QuadExp s)
+  let sleb128_exp s = directive (Sleb128 s)
+  let uleb128_exp s = directive (Uleb128 s)
 end
 
 module I = struct

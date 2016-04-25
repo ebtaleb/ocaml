@@ -292,6 +292,23 @@ let print_line b = function
   | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
   | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
 
+  | SetStr (arg1, arg2) ->
+    Printf.bprintf b "\t.set %s, %s" arg1 arg2
+  | String s ->
+      Printf.bprintf b "\t.string\t\"%s\"" (X86_proc.string_of_string_literal s)
+  | ByteExp s ->
+    Printf.bprintf b "\t.byte\t%s" s
+  | WordExp s ->
+    Printf.bprintf b "\t.hword\t%s" s
+  | LongExp s ->
+    Printf.bprintf b "\t.long\t%s" s
+  | QuadExp s ->
+    Printf.bprintf b "\t.quad\t%s" s
+  | Sleb128 s ->
+    Printf.bprintf b "\t.sleb128\t%s" s
+  | Uleb128 s ->
+    Printf.bprintf b "\t.uleb128\t%s" s
+
   (* masm only *)
   | External _
   | Mode386
